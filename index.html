@@ -158,6 +158,8 @@
                            <span id="g-sheet-btn-text">Simpan ke G-Sheet</span>
                            <div id="g-sheet-loader" class="loader"></div>
                         </button>
+                        <!-- New button for viewing Google Sheet -->
+                        <button id="view-g-sheet-btn" class="flex-grow sm:flex-grow-0 bg-teal-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-700">Lihat G-Sheet</button>
                         <button id="history-btn" class="flex-grow sm:flex-grow-0 bg-gray-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-700">History</button>
                         <button id="print-pdf-btn" class="flex-grow sm:flex-grow-0 bg-purple-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-purple-700">Print PDF</button>
                     </div>
@@ -204,7 +206,7 @@
             let TARGET_OFF_DAYS = 6;
             const MAX_WORK_STREAK = 5;
             const MIN_WORK_STREAK = 3;
-            const specialDates = new Set([1, 16]);
+            const specialDates = new Set([1, 16]); // Dates with 2 Staff P and 2 Crew P
 
             const monthSelect = document.getElementById('month-select');
             const yearSelect = document.getElementById('year-select');
@@ -222,7 +224,8 @@
             const gSheetBtn = document.getElementById('g-sheet-btn');
             const gSheetBtnText = document.getElementById('g-sheet-btn-text');
             const gSheetLoader = document.getElementById('g-sheet-loader');
-            
+            const viewGSheetBtn = document.getElementById('view-g-sheet-btn'); // New button element
+
             let generatedScheduleData = null;
             let scheduleHistory = JSON.parse(localStorage.getItem('scheduleHistory')) || [];
             
@@ -328,7 +331,7 @@
                     `;
                     settingsContainer.appendChild(div);
                 });
-                 document.getElementById('off-days-select').value = TARGET_OFF_DAYS;
+                document.getElementById('off-days-select').value = TARGET_OFF_DAYS;
             }
 
             function updateConfigFromSettings() {
@@ -369,6 +372,7 @@
                     }
                 });
 
+                // Assign 'O' (Off) days
                 for (let offRound = 0; offRound < TARGET_OFF_DAYS; offRound++) {
                     const sortedEmployees = [...employees].sort((a, b) => (employeeStats[a.id]?.lastOffDay ?? -10) - (employeeStats[b.id]?.lastOffDay ?? -10));
                     
@@ -377,6 +381,7 @@
 
                         let placedOff = false;
                         
+                        // Prioritize placing off days within the allowed work streak
                         const searchStart = employeeStats[emp.id].lastOffDay + MIN_WORK_STREAK + 1;
                         const searchEnd = employeeStats[emp.id].lastOffDay + MAX_WORK_STREAK + 1;
 
@@ -384,8 +389,9 @@
                         for (let i = searchStart; i <= searchEnd; i++) {
                             potentialDays.push(i);
                         }
-                        potentialDays.sort(() => Math.random() - 0.5);
+                        potentialDays.sort(() => Math.random() - 0.5); // Randomize search order
 
+                        // Fallback to any available day if within streak range not possible
                         const fallbackDays = [];
                         for (let i = searchEnd + 1; i <= daysInMonth; i++) {
                             fallbackDays.push(i);
@@ -396,16 +402,18 @@
                         for (const currentDay of allSearchDays) {
                             if (currentDay < 1 || currentDay > daysInMonth) continue;
 
+                            // Skip special dates for off days
                             if (specialDates.has(currentDay)) continue;
+                            // Ensure the slot is not already assigned
                             if (schedule[currentDay][emp.id] !== '-') continue;
 
                             const offOnDayIds = Object.keys(schedule[currentDay]).filter(id => schedule[currentDay][id] === 'O');
                             const staffOffCount = offOnDayIds.filter(id => employees.find(e => e.id == id)?.role === 'STAFF').length;
 
                             let canPlace = false;
-                            if (emp.role === 'STAFF' && staffOffCount < 1 && offOnDayIds.length < 2) {
+                            if (emp.role === 'STAFF' && staffOffCount < 1 && offOnDayIds.length < 2) { // Max 1 STAFF off, max 2 total off
                                 canPlace = true;
-                            } else if (emp.role === 'CREW' && offOnDayIds.length < 2) {
+                            } else if (emp.role === 'CREW' && offOnDayIds.length < 2) { // Max 2 total off
                                 canPlace = true;
                             }
 
@@ -414,12 +422,13 @@
                                 employeeStats[emp.id].offCount++;
                                 employeeStats[emp.id].lastOffDay = currentDay;
                                 placedOff = true;
-                                break; 
+                                break; // Move to next employee once off day is placed
                             }
                         }
                     }
                 }
                 
+                // Assign 'P' and 'S' shifts, prioritizing P after O and S before O
                 for (const emp of employees) {
                     const workDays = [];
                     for (let day = 1; day <= daysInMonth; day++) {
@@ -430,6 +439,7 @@
                     const sShiftsNeeded = workDays.length - pShiftsNeeded;
                     let shiftPool = Array(pShiftsNeeded).fill('P').concat(Array(sShiftsNeeded).fill('S'));
                     
+                    // Prioritize P after O and S before O
                     workDays.forEach(day => {
                         if (schedule[day + 1]?.[emp.id] === 'O') {
                             schedule[day][emp.id] = 'P';
@@ -443,14 +453,16 @@
                         }
                     });
 
+                    // Fill remaining days randomly
                     shiftPool.sort(() => Math.random() - 0.5);
                     workDays.forEach(day => {
                         if(schedule[day][emp.id] === '-') {
-                            schedule[day][emp.id] = shiftPool.pop() || 'S';
+                            schedule[day][emp.id] = shiftPool.pop() || 'S'; // Default to S if pool runs out
                         }
                     });
                 }
                 
+                // Balance P/S shifts per day, especially for special dates
                 for (let day = 1; day <= daysInMonth; day++) {
                     const working = employees.filter(e => schedule[day][e.id] !== 'O');
                     if (working.length === 0) continue;
@@ -466,11 +478,14 @@
                     let pCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'P');
                     let sCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'S');
 
+                    // Adjust staff P/S
                     while (pStaff.length > pStaffTarget) sStaff.push(pStaff.splice(Math.floor(Math.random() * pStaff.length), 1)[0]);
                     while (pStaff.length < pStaffTarget && sStaff.length > 0) pStaff.push(sStaff.splice(Math.floor(Math.random() * sStaff.length), 1)[0]);
+                    // Adjust crew P/S
                     while (pCrew.length > pCrewTarget) sCrew.push(pCrew.splice(Math.floor(Math.random() * pCrew.length), 1)[0]);
                     while (pCrew.length < pCrewTarget && sCrew.length > 0) pCrew.push(sCrew.splice(Math.floor(Math.random() * sCrew.length), 1)[0]);
 
+                    // Apply changes back to schedule
                     pStaff.forEach(e => schedule[day][e.id] = 'P');
                     sStaff.forEach(e => schedule[day][e.id] = 'S');
                     pCrew.forEach(e => schedule[day][e.id] = 'P');
@@ -490,7 +505,7 @@
                 const month = parseInt(monthSelect.value);
                 const year = parseInt(yearSelect.value);
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
-                let schedule = getManualOverrides(daysInMonth);
+                let schedule = getManualOverrides(daysInMonth); // Get current state including manual overrides
                 const deliveryStates = {};
                 for (let day = 1; day <= daysInMonth; day++) {
                     const select = document.getElementById(`delivery-day-${day}`);
@@ -512,13 +527,14 @@
                     
                     let shiftPool = Array(pShifts).fill('P').concat(Array(sShifts).fill('S'));
                     
+                    // Reset P/S for days not adjacent to 'O'
                     workDays.forEach(day => {
                         if (schedule[day + 1]?.[emp.id] !== 'O' && schedule[day - 1]?.[emp.id] !== 'O') {
-                            schedule[day][emp.id] = '-';
+                            schedule[day][emp.id] = '-'; // Mark for reshuffling
                         }
                     });
 
-                    shiftPool.sort(() => Math.random() - 0.5);
+                    shiftPool.sort(() => Math.random() - 0.5); // Shuffle the pool
                     workDays.forEach(day => {
                         if(schedule[day][emp.id] === '-') {
                             schedule[day][emp.id] = shiftPool.pop() || 'S';
@@ -526,6 +542,7 @@
                     });
                 }
 
+                // Re-balance P/S shifts per day after shuffling
                 for (let day = 1; day <= daysInMonth; day++) {
                     const working = employees.filter(e => schedule[day][e.id] !== 'O');
                     if (working.length === 0) continue;
@@ -538,11 +555,14 @@
                     let pCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'P');
                     let sCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'S');
 
+                    // Adjust staff P/S
                     while (pStaff.length > pStaffTarget) sStaff.push(pStaff.splice(Math.floor(Math.random() * pStaff.length), 1)[0]);
                     while (pStaff.length < pStaffTarget && sStaff.length > 0) pStaff.push(sStaff.splice(Math.floor(Math.random() * sStaff.length), 1)[0]);
+                    // Adjust crew P/S
                     while (pCrew.length > pCrewTarget) sCrew.push(pCrew.splice(Math.floor(Math.random() * pCrew.length), 1)[0]);
                     while (pCrew.length < pCrewTarget && sCrew.length > 0) pCrew.push(sCrew.splice(Math.floor(Math.random() * sCrew.length), 1)[0]);
 
+                    // Apply changes back to schedule
                     pStaff.forEach(e => schedule[day][e.id] = 'P');
                     sStaff.forEach(e => schedule[day][e.id] = 'S');
                     pCrew.forEach(e => schedule[day][e.id] = 'P');
@@ -599,6 +619,7 @@
                         if (select) {
                             const offOption = select.querySelector('option[value="O"]');
                             if (offOption) {
+                                // Disable 'O' option if limit is reached and current value is not 'O'
                                 offOption.disabled = isOffLimitReached && select.value !== 'O';
                             }
                         }
@@ -646,31 +667,32 @@
                     select.id = `delivery-day-${day}`;
                     select.className = 'cell-select';
                     select.innerHTML = `<option value="tidak" style="color: red;">Tidak</option><option value="ya" style="color: green;">Ya</option>`;
-                    select.value = deliveryStates[day] || (day % 2 !== 0 ? 'ya' : 'tidak');
+                    select.value = deliveryStates[day] || (day % 2 !== 0 ? 'ya' : 'tidak'); // Default to 'ya' for odd days, 'tidak' for even
                     select.addEventListener('change', () => updateDeliverySchedule(day, daysInMonth));
                     deliveryCell.appendChild(select);
                     row.appendChild(deliveryCell);
                     
                     employees.forEach(e => {
-                        const shift = schedule[day]?.[e.id] || 'O';
+                        const shift = schedule[day]?.[e.id] || 'O'; // Default to 'O' if not found
                         const cell = document.createElement('td');
                         const shiftSelect = document.createElement('select');
                         shiftSelect.id = `d${day}-e${e.id}`;
                         shiftSelect.className = `cell-select`;
                         shiftSelect.innerHTML = `<option value="P">P</option><option value="S">S</option><option value="O">O</option>`;
-                        shiftSelect.value = schedule[day]?.[e.id] ? schedule[day][e.id] : 'P';
-                        
+                        shiftSelect.value = schedule[day]?.[e.id] ? schedule[day][e.id] : 'P'; // Set value from schedule or default
+
+                        // Function to set cell color based on shift value
                         const setCellColor = (value) => {
-                            cell.className = '';
+                            cell.className = ''; // Clear existing classes
                             if (value === 'P') cell.classList.add('cell-p');
                             else if (value === 'S') cell.classList.add('cell-s');
                             else if (value === 'O') cell.classList.add('cell-o');
                         };
 
-                        setCellColor(shiftSelect.value);
+                        setCellColor(shiftSelect.value); // Set initial color
                         shiftSelect.addEventListener('change', () => {
                             setCellColor(shiftSelect.value);
-                            updateUIFromDOM();
+                            updateUIFromDOM(); // Update summary and disabled states on change
                         });
 
                         cell.appendChild(shiftSelect);
@@ -678,7 +700,7 @@
                     });
                     scheduleBody.appendChild(row);
                 }
-                updateUIFromDOM();
+                updateUIFromDOM(); // Initial update after rendering
             }
 
             function updateSummary(schedule) {
@@ -710,7 +732,7 @@
                 const timestamp = new Date().toLocaleString('id-ID');
                 scheduleHistory.push({
                     name: `Jadwal ${monthName} ${year} (${timestamp})`,
-                    data: JSON.parse(JSON.stringify(generatedScheduleData))
+                    data: JSON.parse(JSON.stringify(generatedScheduleData)) // Deep copy
                 });
                 localStorage.setItem('scheduleHistory', JSON.stringify(scheduleHistory));
                 if (!isSilent) alert('Jadwal berhasil disimpan secara lokal!');
@@ -740,7 +762,7 @@
                 if (e.target.classList.contains('load-history-btn')) {
                     const index = parseInt(e.target.dataset.index);
                     const loadedData = scheduleHistory[index].data;
-                    generatedScheduleData = loadedData;
+                    generatedScheduleData = loadedData; // Set as current data
                     const month = parseInt(monthSelect.value);
                     const year = parseInt(yearSelect.value);
                     renderSchedule(loadedData, month, year);
@@ -750,16 +772,17 @@
                 if (e.target.classList.contains('delete-history-btn')) {
                     const index = parseInt(e.target.dataset.index);
                     const password = prompt("Masukkan password untuk menghapus item ini:");
-                    if (password === "1234") {
+                    if (password === "1234") { // Simple password for deletion
                         scheduleHistory.splice(index, 1);
                         localStorage.setItem('scheduleHistory', JSON.stringify(scheduleHistory));
                         renderHistory();
-                    } else if (password !== null) { // User tidak menekan cancel
+                    } else if (password !== null) { // User did not press cancel
                         alert("Password salah!");
                     }
                 }
             });
             
+            // Event Listeners for buttons
             generateBtn.addEventListener('click', () => generateSchedule());
             shufflePsBtn.addEventListener('click', shufflePsOnly);
             printPdfBtn.addEventListener('click', () => window.print());
@@ -771,9 +794,13 @@
                 historyModal.classList.add('hidden');
             });
             gSheetBtn.addEventListener('click', saveToGoogleSheet);
+            // New event listener for view Google Sheet button
+            viewGSheetBtn.addEventListener('click', () => {
+                window.open("https://docs.google.com/spreadsheets/d/1f_daABnjMK4cZsrPISmctsVZDjKYyr0iKmCFfWFbWe0/edit?gid=1432366539#gid=1432366539", "_blank");
+            });
             
             initializeSelectors();
         });
     </script>
 </body>
-</ht
+</html>
