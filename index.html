@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator Jadwal Shift - Aturan Final</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .schedule-table th, .schedule-table td {
+            text-align: center;
+            padding: 0.5rem 0.25rem;
+            border: 1px solid #e5e7eb; /* gray-200 */
+            vertical-align: middle;
+        }
+        .cell-p { background-color: #dcfce7; color: #166534; }
+        .cell-s { background-color: #dbeafe; color: #1e40af; }
+        .cell-o { background-color: #fee2e2; color: #991b1b; }
+        .header-staff { background-color: #fef9c3; }
+        .header-crew { background-color: #e0f2fe; }
+        .sticky-col { position: sticky; background-color: #f9fafb; }
+        .col-date { left: 0; z-index: 20; min-width: 60px; }
+        .col-day { left: 60px; z-index: 20; min-width: 80px; }
+        .col-delivery { left: 140px; z-index: 20; min-width: 120px; }
+        .schedule-table thead th { position: sticky; top: 0; z-index: 30; }
+        .cell-select {
+            -webkit-appearance: none;
+            appearance: none;
+            background-color: transparent;
+            border: none;
+            color: inherit;
+            width: 100%;
+            min-width: 60px;
+            padding: 0.25rem;
+            padding-right: 1.5rem; /* Space for arrow */
+            font-size: 0.875rem;
+            font-weight: 700;
+            text-align: center;
+            text-align-last: center; /* For Firefox */
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.2rem center;
+            background-repeat: no-repeat;
+            background-size: 1.2em;
+        }
+         .cell-select option:disabled {
+            background-color: #f3f4f6;
+            color: #9ca3af;
+        }
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div class="bg-white p-6 rounded-xl shadow-lg">
+            <div class="text-center mb-6">
+                <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Generator Jadwal Shift Karyawan</h1>
+                <p class="text-gray-500 mt-1">Membuat komposisi shift & jarak libur yang baik.</p>
+            </div>
+
+            <!-- Kontrol & Ringkasan Mengambang -->
+            <div class="sticky-header py-4 px-2 mb-4 border-b border-gray-200">
+                <!-- Pengaturan -->
+                <details class="mb-4 bg-gray-50 p-3 rounded-lg">
+                    <summary class="font-semibold cursor-pointer">Pengaturan</summary>
+                    <div id="settings-container" class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <!-- Pengaturan akan di-generate oleh JS -->
+                    </div>
+                </details>
+
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div class="flex flex-col sm:flex-row items-center gap-4">
+                        <div>
+                            <label for="month-select" class="sr-only">Bulan:</label>
+                            <select id="month-select" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"></select>
+                        </div>
+                        <div>
+                            <label for="year-select" class="sr-only">Tahun:</label>
+                            <select id="year-select" class="mt-1 sm:mt-0 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"></select>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-center gap-2">
+                        <button id="generate-btn" class="flex-grow sm:flex-grow-0 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200">
+                            Buat Jadwal Baru
+                        </button>
+                         <button id="shuffle-ps-btn" class="flex-grow sm:flex-grow-0 bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                            Acak P/S
+                        </button>
+                        <button id="save-btn" class="flex-grow sm:flex-grow-0 bg-teal-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
+                            Simpan
+                        </button>
+                        <button id="history-btn" class="flex-grow sm:flex-grow-0 bg-gray-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                            History
+                        </button>
+                        <button id="download-btn" class="flex-grow sm:flex-grow-0 bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200" disabled>
+                            Download Excel
+                        </button>
+                    </div>
+                </div>
+                <div id="summary-container" class="mt-4">
+                    <h2 class="text-xl font-bold text-gray-800 mb-3 text-center">Ringkasan Jadwal</h2>
+                    <div id="summary-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4"></div>
+                </div>
+            </div>
+
+            <!-- Tabel Jadwal -->
+            <div id="schedule-container" class="overflow-x-auto">
+                <table id="schedule-table" class="min-w-full bg-white border-collapse schedule-table">
+                    <thead id="schedule-head"></thead>
+                    <tbody id="schedule-body" class="divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="9" class="text-center py-10 text-gray-500 !border-0">
+                                Jadwal belum dibuat.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal History -->
+    <div id="history-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">History Jadwal</h3>
+                <div id="history-list" class="mt-2 px-7 py-3 max-h-96 overflow-y-auto">
+                    <!-- History items will be injected here -->
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="close-history-btn" class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                        Tutup
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- KONFIGURASI ---
+            let employees = [
+                { id: 1, name: 'MALA', role: 'STAFF' }, { id: 2, name: 'DEDY', role: 'STAFF' }, { id: 3, name: 'SEYLA', role: 'STAFF' },
+                { id: 4, name: 'ALFIAN', role: 'CREW' }, { id: 5, name: 'DEWI', role: 'CREW' }, { id: 6, name: 'MISBAH', role: 'CREW' },
+            ];
+            let TARGET_OFF_DAYS = 6;
+            const WORK_STREAK = 4;
+
+            // --- ELEMEN DOM ---
+            const monthSelect = document.getElementById('month-select');
+            const yearSelect = document.getElementById('year-select');
+            const generateBtn = document.getElementById('generate-btn');
+            const shufflePsBtn = document.getElementById('shuffle-ps-btn');
+            const saveBtn = document.getElementById('save-btn');
+            const historyBtn = document.getElementById('history-btn');
+            const downloadBtn = document.getElementById('download-btn');
+            const scheduleHead = document.getElementById('schedule-head');
+            const scheduleBody = document.getElementById('schedule-body');
+            const summaryGrid = document.getElementById('summary-grid');
+            const settingsContainer = document.getElementById('settings-container');
+            const historyModal = document.getElementById('history-modal');
+            const historyList = document.getElementById('history-list');
+            const closeHistoryBtn = document.getElementById('close-history-btn');
+            
+            let generatedScheduleData = null;
+            let scheduleHistory = JSON.parse(localStorage.getItem('scheduleHistory')) || [];
+
+            function initializeSelectors() {
+                const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+                const currentMonth = new Date().getMonth();
+                months.forEach((month, index) => {
+                    const option = new Option(month, index);
+                    if (index === currentMonth) option.selected = true;
+                    monthSelect.add(option);
+                });
+                const currentYear = new Date().getFullYear();
+                for (let i = currentYear - 2; i <= currentYear + 3; i++) {
+                    const option = new Option(i, i);
+                    if (i === currentYear) option.selected = true;
+                    yearSelect.add(option);
+                }
+                renderSettings();
+                updateSummary(null);
+            }
+            
+            function renderSettings() {
+                settingsContainer.innerHTML = `
+                    <div>
+                        <label for="off-days-select" class="block text-sm font-medium text-gray-700">Jumlah Off</label>
+                        <select id="off-days-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                            <option value="4">4</option> <option value="5">5</option> <option value="6" selected>6</option> <option value="7">7</option>
+                        </select>
+                    </div>
+                `;
+                employees.forEach(emp => {
+                    const div = document.createElement('div');
+                    div.innerHTML = `
+                        <label for="name-emp-${emp.id}" class="block text-sm font-medium text-gray-700">${emp.role} ${emp.id > 3 ? emp.id - 3 : emp.id}</label>
+                        <input type="text" id="name-emp-${emp.id}" value="${emp.name}" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    `;
+                    settingsContainer.appendChild(div);
+                });
+                 document.getElementById('off-days-select').value = TARGET_OFF_DAYS;
+            }
+
+            function updateConfigFromSettings() {
+                TARGET_OFF_DAYS = parseInt(document.getElementById('off-days-select').value);
+                employees.forEach(emp => {
+                    const input = document.getElementById(`name-emp-${emp.id}`);
+                    if (input) emp.name = input.value.toUpperCase();
+                });
+            }
+
+            function getManualOverrides(daysInMonth) {
+                const overrides = {};
+                for (let day = 1; day <= daysInMonth; day++) {
+                    overrides[day] = {};
+                    for (const emp of employees) {
+                        const select = document.getElementById(`d${day}-e${emp.id}`);
+                        if (select && select.value !== 'auto') {
+                            overrides[day][emp.id] = select.value;
+                        }
+                    }
+                }
+                return overrides;
+            }
+
+            function generateSchedule(isNew = true) {
+                updateConfigFromSettings();
+                const month = parseInt(monthSelect.value);
+                const year = parseInt(yearSelect.value);
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const manualOverrides = isNew ? {} : getManualOverrides(daysInMonth);
+                
+                const specialDates = new Set([1, 16]);
+
+                let schedule = {};
+                let employeeStats = {};
+                employees.forEach(e => {
+                    employeeStats[e.id] = { offCount: 0, lastOffDay: -WORK_STREAK + Math.floor(Math.random() * 4) };
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        if (!schedule[day]) schedule[day] = {};
+                        schedule[day][e.id] = manualOverrides[day]?.[e.id] || '-';
+                    }
+                });
+
+                if (isNew) {
+                    for (let offRound = 0; offRound < TARGET_OFF_DAYS; offRound++) {
+                        const sortedEmployees = [...employees].sort((a, b) => (employeeStats[a.id]?.lastOffDay ?? 0) - (employeeStats[b.id]?.lastOffDay ?? 0));
+                        for (const emp of sortedEmployees) {
+                            if (employeeStats[emp.id].offCount > offRound) continue;
+                            let placedOff = false;
+                            let startDay = employeeStats[emp.id].lastOffDay + WORK_STREAK + 1;
+                            for (let day = startDay; day <= daysInMonth + WORK_STREAK && !placedOff; day++) {
+                                const currentDay = day > daysInMonth ? day - daysInMonth : day;
+                                if(schedule[currentDay][emp.id] !== '-') continue;
+                                const offOnDayIds = Object.keys(schedule[currentDay]).filter(id => schedule[currentDay][id] === 'O');
+                                const staffOff = offOnDayIds.filter(id => employees.find(e => e.id == id)?.role === 'STAFF').length;
+
+                                let canPlace = false;
+                                if(offOnDayIds.length < 2) {
+                                    if(emp.role === 'STAFF' && staffOff < 1) canPlace = true;
+                                    else if (emp.role === 'CREW') canPlace = true;
+                                }
+
+                                if (canPlace) {
+                                    schedule[currentDay][emp.id] = 'O';
+                                    employeeStats[emp.id].offCount++;
+                                    employeeStats[emp.id].lastOffDay = currentDay;
+                                    placedOff = true;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    let remainingOffTotal = employees.length * TARGET_OFF_DAYS;
+                    const currentOffCounts = calculateStats(schedule).off;
+                    employees.forEach(e => remainingOffTotal -= currentOffCounts[e.id]);
+                    let addAttempts = 0;
+                    while (remainingOffTotal > 0 && addAttempts < 1000) {
+                        const empNeedsOffMost = employees
+                            .filter(e => calculateStats(schedule).off[e.id] < TARGET_OFF_DAYS)
+                            .sort((a, b) => (employeeStats[b.id]?.daysSinceOff || 0) - (employeeStats[a.id]?.daysSinceOff || 0))[0];
+                        if (!empNeedsOffMost) break;
+                        let placed = false;
+                        for (let day = 1; day <= daysInMonth && !placed; day++) {
+                            const offOnDay = Object.values(schedule[day]).filter(s => s === 'O').length;
+                            if (schedule[day][empNeedsOffMost.id] === '-' && schedule[day - 1]?.[empNeedsOffMost.id] !== 'O' && offOnDay < 2) {
+                                schedule[day][empNeedsOffMost.id] = 'O';
+                                remainingOffTotal--;
+                                placed = true;
+                            }
+                        }
+                        addAttempts++;
+                    }
+                }
+                
+                let balancingAttempts = 0;
+                while(balancingAttempts < 1000) {
+                    const currentOffCounts = calculateStats(schedule).off;
+                    const needsOff = employees.find(e => currentOffCounts[e.id] < TARGET_OFF_DAYS);
+                    const hasExtraOff = employees.find(e => currentOffCounts[e.id] > TARGET_OFF_DAYS);
+                    if (!needsOff || !hasExtraOff) break;
+                    let swapped = false;
+                    for (let day = 1; day <= daysInMonth && !swapped; day++) {
+                        if (schedule[day][needsOff.id] !== 'O' && schedule[day][hasExtraOff.id] === 'O') {
+                            if (schedule[day-1]?.[needsOff.id] !== 'O' && schedule[day+1]?.[needsOff.id] !== 'O') {
+                                schedule[day][needsOff.id] = 'O';
+                                schedule[day][hasExtraOff.id] = '-';
+                                swapped = true;
+                            }
+                        }
+                    }
+                    if (!swapped) break; 
+                    balancingAttempts++;
+                }
+                
+                for (const emp of employees) {
+                    const workDays = [];
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        if (schedule[day][emp.id] === '-') workDays.push(day);
+                    }
+                    const pShiftsNeeded = Math.round(workDays.length / 2);
+                    const sShiftsNeeded = workDays.length - pShiftsNeeded;
+                    let shiftPool = Array(pShiftsNeeded).fill('P').concat(Array(sShiftsNeeded).fill('S'));
+                    workDays.forEach(day => {
+                        if (schedule[day + 1]?.[emp.id] === 'O') {
+                            schedule[day][emp.id] = 'P';
+                            const pIndex = shiftPool.indexOf('P');
+                            if (pIndex > -1) shiftPool.splice(pIndex, 1);
+                        }
+                        if (schedule[day - 1]?.[emp.id] === 'O') {
+                            schedule[day][emp.id] = 'S';
+                            const sIndex = shiftPool.indexOf('S');
+                            if (sIndex > -1) shiftPool.splice(sIndex, 1);
+                        }
+                    });
+                    shiftPool.sort(() => Math.random() - 0.5);
+                    workDays.forEach(day => {
+                        if(schedule[day][emp.id] === '-') {
+                            schedule[day][emp.id] = shiftPool.pop() || 'S';
+                        }
+                    });
+                }
+                
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const working = employees.filter(e => schedule[day][e.id] !== 'O');
+                    if (working.length === 0) continue;
+                    let pStaffTarget = 1, pCrewTarget = 1;
+                    if(specialDates.has(day)) { pStaffTarget = 2; pCrewTarget = 2; }
+                    
+                    let pStaff = working.filter(e => e.role === 'STAFF' && schedule[day][e.id] === 'P');
+                    let sStaff = working.filter(e => e.role === 'STAFF' && schedule[day][e.id] === 'S');
+                    let pCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'P');
+                    let sCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'S');
+
+                    while (pStaff.length > pStaffTarget) sStaff.push(pStaff.pop());
+                    while (pStaff.length < pStaffTarget && sStaff.length > 0) pStaff.push(sStaff.pop());
+                    while (pCrew.length > pCrewTarget) sCrew.push(pCrew.pop());
+                    while (pCrew.length < pCrewTarget && sCrew.length > 0) pCrew.push(sCrew.pop());
+
+                    pStaff.forEach(e => schedule[day][e.id] = 'P');
+                    sStaff.forEach(e => schedule[day][e.id] = 'S');
+                    pCrew.forEach(e => schedule[day][e.id] = 'P');
+                    sCrew.forEach(e => schedule[day][e.id] = 'S');
+                }
+
+                generatedScheduleData = schedule;
+                renderSchedule(schedule, month, year);
+                updateSummary(schedule);
+                downloadBtn.disabled = false;
+            }
+
+            function shufflePsOnly() {
+                if (!generatedScheduleData) {
+                    alert("Buat jadwal terlebih dahulu!");
+                    return;
+                }
+                const daysInMonth = new Date(parseInt(yearSelect.value), parseInt(monthSelect.value) + 1, 0).getDate();
+                let schedule = getManualOverrides(daysInMonth);
+                const deliveryStates = {};
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const select = document.getElementById(`delivery-day-${day}`);
+                    if (select) deliveryStates[day] = select.value;
+                }
+                
+                for (const emp of employees) {
+                    const workDays = [];
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        if (schedule[day][emp.id] === 'P' || schedule[day][emp.id] === 'S' || schedule[day][emp.id] === 'auto') {
+                            workDays.push(day);
+                        }
+                    }
+                    const pShifts = workDays.filter(day => schedule[day][emp.id] === 'P').length;
+                    const sShifts = workDays.length - pShifts;
+                    let shiftPool = Array(pShifts).fill('P').concat(Array(sShifts).fill('S'));
+                    
+                    workDays.forEach(day => {
+                         if (schedule[day + 1]?.[emp.id] === 'O' || schedule[day-1]?.[emp.id] === 'O') {
+                            // Skip days next to off days
+                         } else {
+                            schedule[day][emp.id] = '-';
+                         }
+                    });
+
+                    shiftPool.sort(() => Math.random() - 0.5);
+                    workDays.forEach(day => {
+                         if(schedule[day][emp.id] === '-') {
+                            schedule[day][emp.id] = shiftPool.pop() || 'S';
+                        }
+                    });
+                }
+
+                const specialDates = new Set([1, 16]);
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const working = employees.filter(e => schedule[day][e.id] !== 'O');
+                    if (working.length === 0) continue;
+                    let pStaffTarget = 1, pCrewTarget = 1;
+                    if(specialDates.has(day)) { pStaffTarget = 2; pCrewTarget = 2; }
+                    
+                    let pStaff = working.filter(e => e.role === 'STAFF' && schedule[day][e.id] === 'P');
+                    let sStaff = working.filter(e => e.role === 'STAFF' && schedule[day][e.id] === 'S');
+                    let pCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'P');
+                    let sCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'S');
+
+                    while (pStaff.length > pStaffTarget) sStaff.push(pStaff.pop());
+                    while (pStaff.length < pStaffTarget && sStaff.length > 0) pStaff.push(sStaff.pop());
+                    while (pCrew.length > pCrewTarget) sCrew.push(pCrew.pop());
+                    while (pCrew.length < pCrewTarget && sCrew.length > 0) pCrew.push(sCrew.pop());
+
+                    pStaff.forEach(e => schedule[day][e.id] = 'P');
+                    sStaff.forEach(e => schedule[day][e.id] = 'S');
+                    pCrew.forEach(e => schedule[day][e.id] = 'P');
+                    sCrew.forEach(e => schedule[day][e.id] = 'S');
+                }
+
+                generatedScheduleData = schedule;
+                renderSchedule(schedule, parseInt(monthSelect.value), parseInt(yearSelect.value), deliveryStates);
+                updateSummary(schedule);
+            }
+
+
+            function calculateStats(schedule) {
+                let stats = { p: {}, s: {}, off: {} };
+                employees.forEach(e => {
+                    stats.p[e.id] = 0;
+                    stats.s[e.id] = 0;
+                    stats.off[e.id] = 0;
+                });
+                if (!schedule) return stats;
+
+                for (const day in schedule) {
+                    for (const empId in schedule[day]) {
+                        const shift = schedule[day][empId];
+                        if (shift === 'P') stats.p[empId]++;
+                        else if (shift === 'S') stats.s[empId]++;
+                        else if (shift === 'O') stats.off[empId]++;
+                    }
+                }
+                return stats;
+            }
+            
+            function updateDeliverySchedule(startDay, daysInMonth) {
+                const startSelect = document.getElementById(`delivery-day-${startDay}`);
+                if (startSelect.value === 'ya') {
+                    let lastStatus = 'ya';
+                    for (let day = startDay + 1; day <= daysInMonth; day++) {
+                        const currentSelect = document.getElementById(`delivery-day-${day}`);
+                        lastStatus = (lastStatus === 'ya' ? 'tidak' : 'ya');
+                        currentSelect.value = lastStatus;
+                    }
+                }
+            }
+
+            function updateUIFromDOM() {
+                const daysInMonth = new Date(parseInt(yearSelect.value), parseInt(monthSelect.value) + 1, 0).getDate();
+                const tempSchedule = getManualOverrides(daysInMonth);
+                updateSummary(tempSchedule);
+
+                const stats = calculateStats(tempSchedule);
+                employees.forEach(emp => {
+                    const isOffLimitReached = stats.off[emp.id] >= TARGET_OFF_DAYS;
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        const select = document.getElementById(`d${day}-e${emp.id}`);
+                        if (select) {
+                            const offOption = select.querySelector('option[value="O"]');
+                            if (offOption) {
+                                offOption.disabled = isOffLimitReached && select.value !== 'O';
+                            }
+                        }
+                    }
+                });
+            }
+
+            function renderSchedule(schedule, month, year, deliveryStates = {}) {
+                scheduleHead.innerHTML = '';
+                const headerRow = document.createElement('tr');
+                
+                headerRow.innerHTML = `
+                    <th class="sticky-col col-date">TGL</th>
+                    <th class="sticky-col col-day">HARI</th>
+                    <th class="sticky-col col-delivery">Jadwal Kiriman</th>
+                `;
+
+                employees.forEach(e => {
+                    const th = document.createElement('th');
+                    th.innerHTML = `${e.name}<br><span class="font-normal text-xs">${e.role}</span>`;
+                    th.className = e.role === 'STAFF' ? 'header-staff' : 'header-crew';
+                    headerRow.appendChild(th);
+                });
+                scheduleHead.appendChild(headerRow);
+
+                scheduleBody.innerHTML = '';
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const daysOfWeek = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(year, month, day);
+                    const dayName = daysOfWeek[date.getDay()];
+                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+                    const row = document.createElement('tr');
+                    
+                    row.innerHTML = `
+                        <td class="font-medium sticky-col col-date">${day}</td>
+                        <td class="sticky-col col-day ${isWeekend ? 'font-semibold text-red-600' : ''}">${dayName}</td>
+                    `;
+                    
+                    const deliveryCell = document.createElement('td');
+                    deliveryCell.className = 'sticky-col col-delivery bg-gray-50';
+                    const select = document.createElement('select');
+                    select.id = `delivery-day-${day}`;
+                    select.className = 'cell-select';
+                    select.innerHTML = `
+                        <option value="tidak" style="color: red;">Tidak</option>
+                        <option value="ya" style="color: green;">Ya</option>
+                    `;
+                    select.value = deliveryStates[day] || (day % 2 !== 0 ? 'ya' : 'tidak');
+                    select.addEventListener('change', () => updateDeliverySchedule(day, daysInMonth));
+                    deliveryCell.appendChild(select);
+                    row.appendChild(deliveryCell);
+                    
+                    employees.forEach(e => {
+                        const shift = schedule[day]?.[e.id] || 'O';
+                        const cell = document.createElement('td');
+                        const shiftSelect = document.createElement('select');
+                        shiftSelect.id = `d${day}-e${e.id}`;
+                        shiftSelect.className = `cell-select`;
+                        shiftSelect.innerHTML = `
+                            <option value="P">P</option>
+                            <option value="S">S</option>
+                            <option value="O">O</option>
+                        `;
+                        shiftSelect.value = schedule[day]?.[e.id] ? schedule[day][e.id] : 'P';
+                        
+                        const setCellColor = (value) => {
+                            cell.className = ''; // Reset
+                            if (value === 'P') cell.classList.add('cell-p');
+                            else if (value === 'S') cell.classList.add('cell-s');
+                            else if (value === 'O') cell.classList.add('cell-o');
+                        };
+
+                        setCellColor(shiftSelect.value);
+                        shiftSelect.addEventListener('change', () => {
+                            setCellColor(shiftSelect.value);
+                            updateUIFromDOM();
+                        });
+
+                        cell.appendChild(shiftSelect);
+                        row.appendChild(cell);
+                    });
+                    scheduleBody.appendChild(row);
+                }
+                updateUIFromDOM();
+            }
+
+            function updateSummary(schedule) {
+                summaryGrid.innerHTML = '';
+                const stats = calculateStats(schedule);
+
+                employees.forEach(e => {
+                    const card = document.createElement('div');
+                    card.className = `p-3 rounded-lg shadow-sm border ${!schedule ? 'border-gray-200 bg-gray-50' : 'border-green-300 bg-green-50'}`;
+                    card.innerHTML = `
+                        <p class="font-bold text-gray-800">${e.name}</p>
+                        <p class="text-sm text-gray-600">
+                            <span class="font-semibold cell-p px-1 rounded">P: ${stats.p[e.id]}</span>, 
+                            <span class="font-semibold cell-s px-1 rounded">S: ${stats.s[e.id]}</span>, 
+                            <span class="font-bold text-green-700 cell-o px-1 rounded">O: ${stats.off[e.id]}</span>
+                        </p>
+                    `;
+                    summaryGrid.appendChild(card);
+                });
+            }
+
+            function downloadExcel() {
+                if (!generatedScheduleData) return;
+                
+                const month = parseInt(monthSelect.value);
+                const year = parseInt(yearSelect.value);
+                const monthName = monthSelect.options[monthSelect.selectedIndex].text;
+                const fileName = `Jadwal_Shift_${monthName}_${year}.xls`;
+
+                const header = ["TANGGAL", "HARI", "KIRIMAN", ...employees.map(e => e.name)];
+                const data = [header];
+
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const daysOfWeek = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(year, month, day);
+                    const dayName = daysOfWeek[date.getDay()];
+                    const deliverySelect = document.getElementById(`delivery-day-${day}`);
+                    const deliveryStatus = deliverySelect.value === 'ya' ? 'Ya' : '';
+                    const row = [day, dayName, deliveryStatus];
+                    employees.forEach(e => {
+                        row.push(generatedScheduleData[day][e.id] || 'O');
+                    });
+                    data.push(row);
+                }
+                
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Jadwal");
+                XLSX.writeFile(wb, fileName);
+            }
+
+            function saveSchedule() {
+                if(!generatedScheduleData) {
+                    alert('Buat jadwal terlebih dahulu sebelum menyimpan!');
+                    return;
+                }
+                const monthName = monthSelect.options[monthSelect.selectedIndex].text;
+                const year = yearSelect.value;
+                const timestamp = new Date().toLocaleString('id-ID');
+                scheduleHistory.push({
+                    name: `Jadwal ${monthName} ${year} (${timestamp})`,
+                    data: JSON.parse(JSON.stringify(generatedScheduleData)) // Deep copy
+                });
+                localStorage.setItem('scheduleHistory', JSON.stringify(scheduleHistory));
+                alert('Jadwal berhasil disimpan!');
+            }
+
+            function renderHistory() {
+                historyList.innerHTML = '';
+                if(scheduleHistory.length === 0) {
+                    historyList.innerHTML = '<p class="text-gray-500">Belum ada jadwal yang disimpan.</p>';
+                    return;
+                }
+                scheduleHistory.forEach((item, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center p-2 border-b';
+                    div.innerHTML = `
+                        <span>${item.name}</span>
+                        <div>
+                            <button data-index="${index}" class="load-history-btn px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">Muat</button>
+                            <button data-index="${index}" class="delete-history-btn px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600">Hapus</button>
+                        </div>
+                    `;
+                    historyList.appendChild(div);
+                });
+            }
+
+            historyList.addEventListener('click', function(e) {
+                if (e.target.classList.contains('load-history-btn')) {
+                    const index = parseInt(e.target.dataset.index);
+                    const loadedData = scheduleHistory[index].data;
+                    generatedScheduleData = loadedData;
+                    const month = parseInt(monthSelect.value);
+                    const year = parseInt(yearSelect.value);
+                    renderSchedule(loadedData, month, year);
+                    updateSummary(loadedData);
+                    historyModal.classList.add('hidden');
+                }
+                if (e.target.classList.contains('delete-history-btn')) {
+                    const index = parseInt(e.target.dataset.index);
+                    const password = prompt("Masukkan password untuk menghapus item ini:");
+                    if (password === "OK") {
+                        scheduleHistory.splice(index, 1);
+                        localStorage.setItem('scheduleHistory', JSON.stringify(scheduleHistory));
+                        alert("Item berhasil dihapus!");
+                        renderHistory();
+                    } else if (password !== null) {
+                        alert("Password salah!");
+                    }
+                }
+            });
+            
+            function clearHistory() {
+                const password = prompt("Masukkan password untuk menghapus semua history:");
+                if (password === "M2B6") {
+                    scheduleHistory = [];
+                    localStorage.removeItem('scheduleHistory');
+                    alert("History berhasil dihapus!");
+                    renderHistory();
+                } else if (password !== null) {
+                    alert("Password salah!");
+                }
+            }
+
+            // --- EVENT LISTENERS ---
+            generateBtn.addEventListener('click', () => generateSchedule(true));
+            shufflePsBtn.addEventListener('click', shufflePsOnly);
+            const clearHistoryBtn = document.getElementById('clear-history-btn');
+            if(clearHistoryBtn) clearHistoryBtn.addEventListener('click', clearHistory);
+            downloadBtn.addEventListener('click', downloadExcel);
+            saveBtn.addEventListener('click', saveSchedule);
+            historyBtn.addEventListener('click', () => {
+                renderHistory();
+                historyModal.classList.remove('hidden');
+            });
+            closeHistoryBtn.addEventListener('click', () => {
+                historyModal.classList.add('hidden');
+            });
+
+
+            // --- MULAI APLIKASI ---
+            initializeSelectors();
+        });
+    </script>
+</body>
+</html>
