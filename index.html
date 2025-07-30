@@ -84,17 +84,9 @@
 
             <div class="py-4 px-2 mb-4 border-y border-gray-200">
                 <details class="mb-4 bg-gray-50 p-3 rounded-lg">
-                    <summary class="font-semibold cursor-pointer">Pengaturan</summary>
+                    <summary class="font-semibold cursor-pointer">Pengaturan Karyawan</summary>
                     <div id="settings-container" class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <!-- Pengaturan Karyawan akan di-generate oleh JS -->
-                    </div>
-                     <div class="mt-6 pt-4 border-t">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Integrasi Google Apps Script</h3>
-                        <p class="text-sm text-gray-600 mb-4">Masukkan URL Aplikasi Web dari Google Apps Script Anda.</p>
-                        <div>
-                            <label for="apps-script-url-input" class="block text-sm font-medium text-gray-700">URL Aplikasi Web Apps Script</label>
-                            <input type="url" id="apps-script-url-input" placeholder="https://script.google.com/macros/s/..." class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        </div>
                     </div>
                 </details>
 
@@ -182,25 +174,16 @@
             const gSheetBtn = document.getElementById('g-sheet-btn');
             const gSheetBtnText = document.getElementById('g-sheet-btn-text');
             const gSheetLoader = document.getElementById('g-sheet-loader');
-            const appsScriptUrlInput = document.getElementById('apps-script-url-input');
             
             let generatedScheduleData = null;
             let scheduleHistory = JSON.parse(localStorage.getItem('scheduleHistory')) || [];
             
-            appsScriptUrlInput.value = localStorage.getItem('appsScriptUrl') || '';
-
             async function saveToGoogleSheet() {
                 if (!generatedScheduleData) {
                     alert("Buat jadwal terlebih dahulu!");
                     return;
                 }
-                const appsScriptUrl = appsScriptUrlInput.value;
-                if (!appsScriptUrl) {
-                    alert("Harap masukkan URL Aplikasi Web Apps Script di Pengaturan.");
-                    return;
-                }
-                
-                localStorage.setItem('appsScriptUrl', appsScriptUrl);
+                const appsScriptUrl = "https://script.google.com/macros/s/AKfycbwxLa-5z801FlK-0aIg_nR39jcdc4ERtbmswIKAGeDDPMV_dqbVcHPxeY3uo8Ci0GlS8g/exec";
 
                 gSheetBtnText.style.display = 'none';
                 gSheetLoader.style.display = 'block';
@@ -246,6 +229,8 @@
                     const result = await response.json();
                     if (result.status === 'sukses') {
                         alert(result.message);
+                        // Simpan ke history lokal secara otomatis setelah berhasil
+                        saveSchedule(true); // true = silent mode
                     } else {
                         throw new Error(result.message);
                     }
@@ -700,9 +685,9 @@
                 XLSX.writeFile(wb, fileName);
             }
 
-            function saveSchedule() {
+            function saveSchedule(isSilent = false) {
                 if(!generatedScheduleData) {
-                    alert('Buat jadwal terlebih dahulu sebelum menyimpan!');
+                    if (!isSilent) alert('Buat jadwal terlebih dahulu sebelum menyimpan!');
                     return;
                 }
                 const monthName = monthSelect.options[monthSelect.selectedIndex].text;
@@ -713,7 +698,7 @@
                     data: JSON.parse(JSON.stringify(generatedScheduleData))
                 });
                 localStorage.setItem('scheduleHistory', JSON.stringify(scheduleHistory));
-                alert('Jadwal berhasil disimpan secara lokal!');
+                if (!isSilent) alert('Jadwal berhasil disimpan secara lokal!');
             }
 
             function renderHistory() {
@@ -749,10 +734,13 @@
                 }
                 if (e.target.classList.contains('delete-history-btn')) {
                     const index = parseInt(e.target.dataset.index);
-                    if (confirm("Apakah Anda yakin ingin menghapus item history ini?")) {
+                    const password = prompt("Masukkan password untuk menghapus item ini:");
+                    if (password === "1234") {
                         scheduleHistory.splice(index, 1);
                         localStorage.setItem('scheduleHistory', JSON.stringify(scheduleHistory));
                         renderHistory();
+                    } else if (password !== null) { // User tidak menekan cancel
+                        alert("Password salah!");
                     }
                 }
             });
@@ -760,7 +748,7 @@
             generateBtn.addEventListener('click', () => generateSchedule());
             shufflePsBtn.addEventListener('click', shufflePsOnly);
             downloadBtn.addEventListener('click', downloadExcel);
-            saveBtn.addEventListener('click', saveSchedule);
+            saveBtn.addEventListener('click', () => saveSchedule(false)); // false = show alert
             historyBtn.addEventListener('click', () => {
                 renderHistory();
                 historyModal.classList.remove('hidden');
