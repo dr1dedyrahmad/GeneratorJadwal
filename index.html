@@ -26,7 +26,7 @@
         .col-date { left: 0; z-index: 20; min-width: 60px; }
         .col-day { left: 60px; z-index: 20; min-width: 80px; }
         .col-delivery { left: 140px; z-index: 20; min-width: 120px; }
-        .schedule-table thead th { position: sticky; top: 0; z-index: 30; }
+        .schedule-table thead th { position: sticky; top: 0; z-index: 30; background-color: #f9fafb; }
         .cell-select {
             -webkit-appearance: none;
             appearance: none;
@@ -51,26 +51,19 @@
             background-color: #f3f4f6;
             color: #9ca3af;
         }
-        .sticky-header {
-            position: sticky;
-            top: 0;
-            z-index: 40;
-            background-color: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(8px);
-        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
-    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div class="bg-white p-6 rounded-xl shadow-lg">
+    <div class="container mx-auto p-2 sm:p-4 lg:p-8">
+        <div class="bg-white p-4 sm:p-6 rounded-xl shadow-lg">
             <div class="text-center mb-6">
                 <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Generator Jadwal Shift Karyawan</h1>
                 <p class="text-gray-500 mt-1">Membuat komposisi shift & jarak libur yang baik.</p>
             </div>
 
-            <!-- Kontrol & Ringkasan Mengambang -->
-            <div class="sticky-header py-4 px-2 mb-4 border-b border-gray-200">
+            <!-- Kontrol & Ringkasan -->
+            <div class="py-4 px-2 mb-4 border-y border-gray-200">
                 <!-- Pengaturan -->
                 <details class="mb-4 bg-gray-50 p-3 rounded-lg">
                     <summary class="font-semibold cursor-pointer">Pengaturan</summary>
@@ -91,10 +84,10 @@
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center justify-center gap-2">
-                        <button id="generate-btn" class="flex-grow sm:flex-grow-0 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200">
+                        <button id="generate-btn" class="flex-grow w-full sm:w-auto sm:flex-grow-0 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200">
                             Buat Jadwal Baru
                         </button>
-                         <button id="shuffle-ps-btn" class="flex-grow sm:flex-grow-0 bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                         <button id="shuffle-ps-btn" class="flex-grow w-full sm:w-auto sm:flex-grow-0 bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
                             Acak P/S
                         </button>
                         <button id="save-btn" class="flex-grow sm:flex-grow-0 bg-teal-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
@@ -156,7 +149,11 @@
                 { id: 4, name: 'ALFIAN', role: 'CREW' }, { id: 5, name: 'DEWI', role: 'CREW' }, { id: 6, name: 'MISBAH', role: 'CREW' },
             ];
             let TARGET_OFF_DAYS = 6;
-            const WORK_STREAK = 4;
+            const MAX_WORK_STREAK = 5;
+            const MIN_WORK_STREAK = 3;
+            // On these dates, 4 people work morning shift (2 staff, 2 crew) and 2 work afternoon (1 staff, 1 crew). No one is off.
+            const specialDates = new Set([1, 16]);
+
 
             // --- ELEMEN DOM ---
             const monthSelect = document.getElementById('month-select');
@@ -237,104 +234,85 @@
                 return overrides;
             }
 
-            function generateSchedule(isNew = true) {
+            function generateSchedule() {
                 updateConfigFromSettings();
                 const month = parseInt(monthSelect.value);
                 const year = parseInt(yearSelect.value);
                 const daysInMonth = new Date(year, month + 1, 0).getDate();
-                const manualOverrides = isNew ? {} : getManualOverrides(daysInMonth);
                 
-                const specialDates = new Set([1, 16]);
-
                 let schedule = {};
                 let employeeStats = {};
                 employees.forEach(e => {
-                    employeeStats[e.id] = { offCount: 0, lastOffDay: -WORK_STREAK + Math.floor(Math.random() * 4) };
+                    employeeStats[e.id] = { offCount: 0, lastOffDay: -5 + Math.floor(Math.random() * 3) };
                     for (let day = 1; day <= daysInMonth; day++) {
                         if (!schedule[day]) schedule[day] = {};
-                        schedule[day][e.id] = manualOverrides[day]?.[e.id] || '-';
+                        schedule[day][e.id] = '-';
                     }
                 });
 
-                if (isNew) {
-                    for (let offRound = 0; offRound < TARGET_OFF_DAYS; offRound++) {
-                        const sortedEmployees = [...employees].sort((a, b) => (employeeStats[a.id]?.lastOffDay ?? 0) - (employeeStats[b.id]?.lastOffDay ?? 0));
-                        for (const emp of sortedEmployees) {
-                            if (employeeStats[emp.id].offCount > offRound) continue;
-                            let placedOff = false;
-                            let startDay = employeeStats[emp.id].lastOffDay + WORK_STREAK + 1;
-                            for (let day = startDay; day <= daysInMonth + WORK_STREAK && !placedOff; day++) {
-                                const currentDay = day > daysInMonth ? day - daysInMonth : day;
-                                if(schedule[currentDay][emp.id] !== '-') continue;
-                                const offOnDayIds = Object.keys(schedule[currentDay]).filter(id => schedule[currentDay][id] === 'O');
-                                const staffOff = offOnDayIds.filter(id => employees.find(e => e.id == id)?.role === 'STAFF').length;
+                // --- 1. Place Off Days ('O') ---
+                for (let offRound = 0; offRound < TARGET_OFF_DAYS; offRound++) {
+                    const sortedEmployees = [...employees].sort((a, b) => (employeeStats[a.id]?.lastOffDay ?? -10) - (employeeStats[b.id]?.lastOffDay ?? -10));
+                    
+                    for (const emp of sortedEmployees) {
+                        if (employeeStats[emp.id].offCount > offRound) continue;
 
-                                let canPlace = false;
-                                if(offOnDayIds.length < 2) {
-                                    if(emp.role === 'STAFF' && staffOff < 1) canPlace = true;
-                                    else if (emp.role === 'CREW') canPlace = true;
-                                }
+                        let placedOff = false;
+                        
+                        const searchStart = employeeStats[emp.id].lastOffDay + MIN_WORK_STREAK + 1;
+                        const searchEnd = employeeStats[emp.id].lastOffDay + MAX_WORK_STREAK + 1;
 
-                                if (canPlace) {
-                                    schedule[currentDay][emp.id] = 'O';
-                                    employeeStats[emp.id].offCount++;
-                                    employeeStats[emp.id].lastOffDay = currentDay;
-                                    placedOff = true;
-                                }
+                        const potentialDays = [];
+                        for (let i = searchStart; i <= searchEnd; i++) {
+                            potentialDays.push(i);
+                        }
+                        potentialDays.sort(() => Math.random() - 0.5);
+
+                        const fallbackDays = [];
+                        for (let i = searchEnd + 1; i <= daysInMonth; i++) {
+                            fallbackDays.push(i);
+                        }
+
+                        const allSearchDays = [...potentialDays, ...fallbackDays];
+
+                        for (const currentDay of allSearchDays) {
+                            if (currentDay < 1 || currentDay > daysInMonth) continue;
+
+                            if (specialDates.has(currentDay)) continue;
+                            if (schedule[currentDay][emp.id] !== '-') continue;
+
+                            const offOnDayIds = Object.keys(schedule[currentDay]).filter(id => schedule[currentDay][id] === 'O');
+                            const staffOffCount = offOnDayIds.filter(id => employees.find(e => e.id == id)?.role === 'STAFF').length;
+
+                            let canPlace = false;
+                            if (emp.role === 'STAFF' && staffOffCount < 1 && offOnDayIds.length < 2) {
+                                canPlace = true;
+                            } else if (emp.role === 'CREW' && offOnDayIds.length < 2) {
+                                canPlace = true;
+                            }
+
+                            if (canPlace) {
+                                schedule[currentDay][emp.id] = 'O';
+                                employeeStats[emp.id].offCount++;
+                                employeeStats[emp.id].lastOffDay = currentDay;
+                                placedOff = true;
+                                break; 
                             }
                         }
-                    }
-                } else {
-                    let remainingOffTotal = employees.length * TARGET_OFF_DAYS;
-                    const currentOffCounts = calculateStats(schedule).off;
-                    employees.forEach(e => remainingOffTotal -= currentOffCounts[e.id]);
-                    let addAttempts = 0;
-                    while (remainingOffTotal > 0 && addAttempts < 1000) {
-                        const empNeedsOffMost = employees
-                            .filter(e => calculateStats(schedule).off[e.id] < TARGET_OFF_DAYS)
-                            .sort((a, b) => (employeeStats[b.id]?.daysSinceOff || 0) - (employeeStats[a.id]?.daysSinceOff || 0))[0];
-                        if (!empNeedsOffMost) break;
-                        let placed = false;
-                        for (let day = 1; day <= daysInMonth && !placed; day++) {
-                            const offOnDay = Object.values(schedule[day]).filter(s => s === 'O').length;
-                            if (schedule[day][empNeedsOffMost.id] === '-' && schedule[day - 1]?.[empNeedsOffMost.id] !== 'O' && offOnDay < 2) {
-                                schedule[day][empNeedsOffMost.id] = 'O';
-                                remainingOffTotal--;
-                                placed = true;
-                            }
-                        }
-                        addAttempts++;
                     }
                 }
                 
-                let balancingAttempts = 0;
-                while(balancingAttempts < 1000) {
-                    const currentOffCounts = calculateStats(schedule).off;
-                    const needsOff = employees.find(e => currentOffCounts[e.id] < TARGET_OFF_DAYS);
-                    const hasExtraOff = employees.find(e => currentOffCounts[e.id] > TARGET_OFF_DAYS);
-                    if (!needsOff || !hasExtraOff) break;
-                    let swapped = false;
-                    for (let day = 1; day <= daysInMonth && !swapped; day++) {
-                        if (schedule[day][needsOff.id] !== 'O' && schedule[day][hasExtraOff.id] === 'O') {
-                            if (schedule[day-1]?.[needsOff.id] !== 'O' && schedule[day+1]?.[needsOff.id] !== 'O') {
-                                schedule[day][needsOff.id] = 'O';
-                                schedule[day][hasExtraOff.id] = '-';
-                                swapped = true;
-                            }
-                        }
-                    }
-                    if (!swapped) break; 
-                    balancingAttempts++;
-                }
-                
+                // --- 2. Assign P/S for each employee based on their workdays ---
                 for (const emp of employees) {
                     const workDays = [];
                     for (let day = 1; day <= daysInMonth; day++) {
                         if (schedule[day][emp.id] === '-') workDays.push(day);
                     }
+                    
                     const pShiftsNeeded = Math.round(workDays.length / 2);
                     const sShiftsNeeded = workDays.length - pShiftsNeeded;
                     let shiftPool = Array(pShiftsNeeded).fill('P').concat(Array(sShiftsNeeded).fill('S'));
+                    
                     workDays.forEach(day => {
                         if (schedule[day + 1]?.[emp.id] === 'O') {
                             schedule[day][emp.id] = 'P';
@@ -347,6 +325,7 @@
                             if (sIndex > -1) shiftPool.splice(sIndex, 1);
                         }
                     });
+
                     shiftPool.sort(() => Math.random() - 0.5);
                     workDays.forEach(day => {
                         if(schedule[day][emp.id] === '-') {
@@ -355,21 +334,39 @@
                     });
                 }
                 
+                // --- 3. Re-balance P/S shifts for each day to meet daily targets ---
                 for (let day = 1; day <= daysInMonth; day++) {
                     const working = employees.filter(e => schedule[day][e.id] !== 'O');
                     if (working.length === 0) continue;
+                    
                     let pStaffTarget = 1, pCrewTarget = 1;
-                    if(specialDates.has(day)) { pStaffTarget = 2; pCrewTarget = 2; }
+                    if(specialDates.has(day)) { 
+                        pStaffTarget = 2; 
+                        pCrewTarget = 2; 
+                    }
                     
                     let pStaff = working.filter(e => e.role === 'STAFF' && schedule[day][e.id] === 'P');
                     let sStaff = working.filter(e => e.role === 'STAFF' && schedule[day][e.id] === 'S');
                     let pCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'P');
                     let sCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'S');
 
-                    while (pStaff.length > pStaffTarget) sStaff.push(pStaff.pop());
-                    while (pStaff.length < pStaffTarget && sStaff.length > 0) pStaff.push(sStaff.pop());
-                    while (pCrew.length > pCrewTarget) sCrew.push(pCrew.pop());
-                    while (pCrew.length < pCrewTarget && sCrew.length > 0) pCrew.push(sCrew.pop());
+                    while (pStaff.length > pStaffTarget) {
+                        const idx = Math.floor(Math.random() * pStaff.length);
+                        sStaff.push(pStaff.splice(idx, 1)[0]);
+                    }
+                    while (pStaff.length < pStaffTarget && sStaff.length > 0) {
+                        const idx = Math.floor(Math.random() * sStaff.length);
+                        pStaff.push(sStaff.splice(idx, 1)[0]);
+                    }
+
+                    while (pCrew.length > pCrewTarget) {
+                        const idx = Math.floor(Math.random() * pCrew.length);
+                        sCrew.push(pCrew.splice(idx, 1)[0]);
+                    }
+                    while (pCrew.length < pCrewTarget && sCrew.length > 0) {
+                        const idx = Math.floor(Math.random() * sCrew.length);
+                        pCrew.push(sCrew.splice(idx, 1)[0]);
+                    }
 
                     pStaff.forEach(e => schedule[day][e.id] = 'P');
                     sStaff.forEach(e => schedule[day][e.id] = 'S');
@@ -388,7 +385,9 @@
                     alert("Buat jadwal terlebih dahulu!");
                     return;
                 }
-                const daysInMonth = new Date(parseInt(yearSelect.value), parseInt(monthSelect.value) + 1, 0).getDate();
+                const month = parseInt(monthSelect.value);
+                const year = parseInt(yearSelect.value);
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
                 let schedule = getManualOverrides(daysInMonth);
                 const deliveryStates = {};
                 for (let day = 1; day <= daysInMonth; day++) {
@@ -398,35 +397,37 @@
                 
                 for (const emp of employees) {
                     const workDays = [];
+                    let pShifts = 0;
+                    let sShifts = 0;
                     for (let day = 1; day <= daysInMonth; day++) {
-                        if (schedule[day][emp.id] === 'P' || schedule[day][emp.id] === 'S' || schedule[day][emp.id] === 'auto') {
+                        const shift = schedule[day][emp.id];
+                        if (shift === 'P' || shift === 'S') {
                             workDays.push(day);
+                            if (shift === 'P') pShifts++;
+                            else sShifts++;
                         }
                     }
-                    const pShifts = workDays.filter(day => schedule[day][emp.id] === 'P').length;
-                    const sShifts = workDays.length - pShifts;
+                    
                     let shiftPool = Array(pShifts).fill('P').concat(Array(sShifts).fill('S'));
                     
                     workDays.forEach(day => {
-                         if (schedule[day + 1]?.[emp.id] === 'O' || schedule[day-1]?.[emp.id] === 'O') {
-                            // Skip days next to off days
-                         } else {
+                        if (schedule[day + 1]?.[emp.id] !== 'O' && schedule[day - 1]?.[emp.id] !== 'O') {
                             schedule[day][emp.id] = '-';
-                         }
+                        }
                     });
 
                     shiftPool.sort(() => Math.random() - 0.5);
                     workDays.forEach(day => {
-                         if(schedule[day][emp.id] === '-') {
+                        if(schedule[day][emp.id] === '-') {
                             schedule[day][emp.id] = shiftPool.pop() || 'S';
                         }
                     });
                 }
 
-                const specialDates = new Set([1, 16]);
                 for (let day = 1; day <= daysInMonth; day++) {
                     const working = employees.filter(e => schedule[day][e.id] !== 'O');
                     if (working.length === 0) continue;
+                    
                     let pStaffTarget = 1, pCrewTarget = 1;
                     if(specialDates.has(day)) { pStaffTarget = 2; pCrewTarget = 2; }
                     
@@ -435,10 +436,22 @@
                     let pCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'P');
                     let sCrew = working.filter(e => e.role === 'CREW' && schedule[day][e.id] === 'S');
 
-                    while (pStaff.length > pStaffTarget) sStaff.push(pStaff.pop());
-                    while (pStaff.length < pStaffTarget && sStaff.length > 0) pStaff.push(sStaff.pop());
-                    while (pCrew.length > pCrewTarget) sCrew.push(pCrew.pop());
-                    while (pCrew.length < pCrewTarget && sCrew.length > 0) pCrew.push(sCrew.pop());
+                    while (pStaff.length > pStaffTarget) {
+                        const idx = Math.floor(Math.random() * pStaff.length);
+                        sStaff.push(pStaff.splice(idx, 1)[0]);
+                    }
+                    while (pStaff.length < pStaffTarget && sStaff.length > 0) {
+                        const idx = Math.floor(Math.random() * sStaff.length);
+                        pStaff.push(sStaff.splice(idx, 1)[0]);
+                    }
+                    while (pCrew.length > pCrewTarget) {
+                        const idx = Math.floor(Math.random() * pCrew.length);
+                        sCrew.push(pCrew.splice(idx, 1)[0]);
+                    }
+                    while (pCrew.length < pCrewTarget && sCrew.length > 0) {
+                        const idx = Math.floor(Math.random() * sCrew.length);
+                        pCrew.push(sCrew.splice(idx, 1)[0]);
+                    }
 
                     pStaff.forEach(e => schedule[day][e.id] = 'P');
                     sStaff.forEach(e => schedule[day][e.id] = 'S');
@@ -447,7 +460,7 @@
                 }
 
                 generatedScheduleData = schedule;
-                renderSchedule(schedule, parseInt(monthSelect.value), parseInt(yearSelect.value), deliveryStates);
+                renderSchedule(schedule, month, year, deliveryStates);
                 updateSummary(schedule);
             }
 
@@ -710,7 +723,7 @@
             }
 
             // --- EVENT LISTENERS ---
-            generateBtn.addEventListener('click', () => generateSchedule(true));
+            generateBtn.addEventListener('click', () => generateSchedule());
             shufflePsBtn.addEventListener('click', shufflePsOnly);
             const clearHistoryBtn = document.getElementById('clear-history-btn');
             if(clearHistoryBtn) clearHistoryBtn.addEventListener('click', clearHistory);
